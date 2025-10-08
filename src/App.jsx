@@ -8,6 +8,7 @@ import DoctorProfile from './Doctor/DoctorProfile';
 import PatientDashboard from './Patient/PatientDashboard';
 import DoctorDashboard from './Doctor/DoctorDashboard';
 import PatientManagement from './Doctor/PatientManagement';
+import DiseaseAnalysis from './Patient/DiseaseAnalysis';
 
 // Import your medical lab/diagnostic components
 // import BloodPressureMonitor from './Patient/blood-pressure-monitor';
@@ -202,6 +203,15 @@ const AppContent = () => {
           element={
             <ProtectedRoute requiresAuth={true} requiresRole="doctor" requiresProfile={true}>
               <PatientManagement />
+            </ProtectedRoute>
+          }
+        />
+  
+        <Route
+          path="/disease-analysis"
+          element={
+            <ProtectedRoute requiresAuth={true} requiresRole="patient" requiresProfile={true}>
+              <DiseaseAnalysis />
             </ProtectedRoute>
           }
         />
