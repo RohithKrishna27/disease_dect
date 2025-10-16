@@ -9,7 +9,7 @@ import PatientDashboard from './Patient/PatientDashboard';
 import DoctorDashboard from './Doctor/DoctorDashboard';
 import PatientManagement from './Doctor/PatientManagement';
 import DiseaseAnalysis from './Patient/DiseaseAnalysis';
-
+import HealthMonitor from './Patient/HealthMonitor';
 // Import your medical lab/diagnostic components
 // import BloodPressureMonitor from './Patient/blood-pressure-monitor';
 // import ECGSimulator from './Patient/ecg-simulator';
@@ -226,14 +226,14 @@ const AppContent = () => {
           }
         /> */}
 
-        {/* <Route
-          path="/ecg-simulator"
+        { <Route
+          path="/health-monitoring"
           element={
             <ProtectedRoute requiresAuth={true} requiresRole="patient" requiresProfile={true}>
-              <ECGSimulator />
+              <HealthMonitor />
             </ProtectedRoute>
           }
-        /> */}
+        /> }
 
         {/* <Route
           path="/glucose-monitor"
