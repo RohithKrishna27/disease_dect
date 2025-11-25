@@ -18,6 +18,7 @@ const HealthMonitor = () => {
 
   const [vitalSigns, setVitalSigns] = useState({
     heartRate: 0,
+    bpm: 0,
     bloodPressureSys: null,
     bloodPressureDia: null,
     oxygenLevel: 0,
@@ -26,14 +27,13 @@ const HealthMonitor = () => {
     glucoseLevel: null
   });
 
-  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState(null);
   const [alertLevel, setAlertLevel] = useState('normal');
   const [isConnected, setIsConnected] = useState(false);
   const [esp32Connected, setEsp32Connected] = useState(false);
   const [history, setHistory] = useState([]);
   const [patientId, setPatientId] = useState('');
   const intervalRef = useRef(null);
-  const rtdbRef = useRef(null);
 
   const diseases = [
     'Cardiac Arrest',
@@ -46,11 +46,9 @@ const HealthMonitor = () => {
   // Initialize Firebase RTDB
   const initializeFirebase = async (patientName) => {
     try {
-      // Generate patient ID
       const pid = `patient_${Date.now()}`;
       setPatientId(pid);
 
-      // Initialize patient in RTDB
       const response = await fetch(`${FIREBASE_CONFIG.databaseURL}/patients/${pid}.json`, {
         method: 'PUT',
         headers: {
@@ -71,6 +69,7 @@ const HealthMonitor = () => {
           },
           vitals: {
             heartRate: 0,
+            bpm: 0,
             oxygenLevel: 0,
             bloodPressureSys: null,
             bloodPressureDia: null,
@@ -91,25 +90,13 @@ const HealthMonitor = () => {
     return null;
   };
 
-  // Generate normal vital signs (for initial demo)
+  // Generate normal vital signs
   const generateNormalVitals = () => {
+    const heartRate = Math.floor(70 + Math.random() * 15);
     return {
-      heartRate: Math.floor(70 + Math.random() * 15), // 70-85 bpm (normal)
-      oxygenLevel: Math.floor(96 + Math.random() * 4), // 96-100% (normal)
-      bloodPressureSys: null,
-      bloodPressureDia: null,
-      temperature: null,
-      respiratoryRate: null,
-      glucoseLevel: null
-    };
-  };
-
-  // Simulate ESP32 data - just pretending it's connected
-  const generateESP32Data = () => {
-    // Pretend ESP32 is sending data (but it's just random values)
-    return {
-      heartRate: Math.floor(68 + Math.random() * 18), // 68-86 bpm
-      oxygenLevel: Math.floor(95 + Math.random() * 5), // 95-100%
+      heartRate: heartRate,
+      bpm: heartRate,
+      oxygenLevel: Math.floor(96 + Math.random() * 4),
       bloodPressureSys: null,
       bloodPressureDia: null,
       temperature: null,
@@ -125,7 +112,6 @@ const HealthMonitor = () => {
     try {
       const timestamp = new Date().toISOString();
       
-      // Update current vitals
       await fetch(`${FIREBASE_CONFIG.databaseURL}/patients/${patientId}/vitals.json`, {
         method: 'PUT',
         headers: {
@@ -137,7 +123,6 @@ const HealthMonitor = () => {
         })
       });
 
-      // Store in history (every 2 minutes for long-term storage)
       const minutes = new Date().getMinutes();
       if (minutes % 2 === 0) {
         const historyKey = Date.now();
@@ -158,25 +143,6 @@ const HealthMonitor = () => {
     } catch (error) {
       console.error('Error storing vitals:', error);
     }
-  };
-
-  // Listen to ESP32 data from Firebase
-  const listenToESP32Data = async () => {
-    if (!patientId) return;
-
-    try {
-      const response = await fetch(`${FIREBASE_CONFIG.databaseURL}/patients/${patientId}/esp32Data.json`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data) {
-          setEsp32Connected(true);
-          return data;
-        }
-      }
-    } catch (error) {
-      console.error('Error reading ESP32 data:', error);
-    }
-    return null;
   };
 
   const analyzeVitals = (vitals) => {
@@ -208,7 +174,6 @@ const HealthMonitor = () => {
     if (patientData.name && patientData.age && patientData.weight && patientData.disease) {
       setStage('connecting');
       
-      // Initialize Firebase
       const pid = await initializeFirebase(patientData.name);
       
       setTimeout(() => {
@@ -220,36 +185,29 @@ const HealthMonitor = () => {
 
   useEffect(() => {
     if (stage === 'monitoring' && isConnected) {
-      // Initial vitals
       const initialVitals = generateNormalVitals();
       setVitalSigns(initialVitals);
       storeVitalsToFirebase(initialVitals);
       const initialAnalysis = analyzeVitals(initialVitals);
       setAiAnalysis(initialAnalysis);
 
-      // Update every 5 seconds with random values (pretending ESP32 is connected)
       intervalRef.current = setInterval(async () => {
-        // Generate random values - pretending they're from ESP32
         const updatedVitals = generateNormalVitals();
         
-        // Pretend ESP32 is connected (but it's just random data)
         setEsp32Connected(true);
         
         setVitalSigns(updatedVitals);
         
-        // Store to Firebase
         await storeVitalsToFirebase(updatedVitals);
         
-        // Update history
         setHistory(prev => [...prev.slice(-19), {
           time: new Date().toLocaleTimeString(),
           ...updatedVitals
         }]);
 
-        // Analyze
         const analysis = analyzeVitals(updatedVitals);
         setAiAnalysis(analysis);
-      }, 5000);
+      }, 15000);
 
       return () => {
         if (intervalRef.current) {
@@ -401,14 +359,23 @@ const HealthMonitor = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <VitalCard
             icon={<Heart className="w-6 h-6" />}
-            title="Heart Rate (BPM)"
+            title="Heart Rate"
             value={vitalSigns.heartRate}
             unit="bpm"
             normal="60-100"
             color="red"
+            active={true}
+          />
+          <VitalCard
+            icon={<Activity className="w-6 h-6" />}
+            title="BPM"
+            value={vitalSigns.bpm}
+            unit="bpm"
+            normal="60-100"
+            color="pink"
             active={true}
           />
           <VitalCard
@@ -429,6 +396,9 @@ const HealthMonitor = () => {
             color="purple"
             active={false}
           />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <VitalCard
             icon={<Thermometer className="w-6 h-6" />}
             title="Temperature"
@@ -458,141 +428,139 @@ const HealthMonitor = () => {
           />
         </div>
 
-        <div className={`rounded-lg shadow-md p-6 mb-6 ${
-          alertLevel === 'critical' ? 'bg-red-50 border-2 border-red-300' :
-          alertLevel === 'warning' ? 'bg-yellow-50 border-2 border-yellow-300' :
-          'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200'
-        }`}>
-          <div className="flex items-start">
-            <div className={`p-3 rounded-lg mr-4 ${
-              alertLevel === 'critical' ? 'bg-red-100' :
-              alertLevel === 'warning' ? 'bg-yellow-100' :
-              'bg-green-100'
-            }`}>
-              {alertLevel === 'critical' ? (
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-              ) : alertLevel === 'warning' ? (
-                <AlertTriangle className="w-6 h-6 text-yellow-600" />
-              ) : (
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              )}
-            </div>
-            <div className="flex-1">
-              <h3 className={`text-lg font-bold mb-3 ${
-                alertLevel === 'critical' ? 'text-red-800' :
-                alertLevel === 'warning' ? 'text-yellow-800' :
-                'text-green-800'
+        {aiAnalysis && (
+          <div className={`rounded-lg shadow-md p-6 mb-6 ${
+            alertLevel === 'critical' ? 'bg-red-50 border-2 border-red-300' :
+            alertLevel === 'warning' ? 'bg-yellow-50 border-2 border-yellow-300' :
+            'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200'
+          }`}>
+            <div className="flex items-start">
+              <div className={`p-3 rounded-lg mr-4 ${
+                alertLevel === 'critical' ? 'bg-red-100' :
+                alertLevel === 'warning' ? 'bg-yellow-100' :
+                'bg-green-100'
               }`}>
-                AI Analysis & Recommendations
-              </h3>
-              
-              {/* Status Badge */}
-              <div className={`inline-flex items-center px-4 py-2 rounded-full font-semibold text-sm mb-4 ${
-                aiAnalysis.status === 'Critical' ? 'bg-red-200 text-red-900' :
-                aiAnalysis.status === 'Caution' ? 'bg-yellow-200 text-yellow-900' :
-                'bg-green-200 text-green-900'
-              }`}>
-                Current Status: {aiAnalysis.status}
+                {alertLevel === 'critical' ? (
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                ) : alertLevel === 'warning' ? (
+                  <AlertTriangle className="w-6 h-6 text-yellow-600" />
+                ) : (
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                )}
               </div>
+              <div className="flex-1">
+                <h3 className={`text-lg font-bold mb-3 ${
+                  alertLevel === 'critical' ? 'text-red-800' :
+                  alertLevel === 'warning' ? 'text-yellow-800' :
+                  'text-green-800'
+                }`}>
+                  AI Analysis & Recommendations
+                </h3>
+                
+                <div className={`inline-flex items-center px-4 py-2 rounded-full font-semibold text-sm mb-4 ${
+                  aiAnalysis.status === 'Critical' ? 'bg-red-200 text-red-900' :
+                  aiAnalysis.status === 'Caution' ? 'bg-yellow-200 text-yellow-900' :
+                  'bg-green-200 text-green-900'
+                }`}>
+                  Current Status: {aiAnalysis.status}
+                </div>
 
-              {/* Concerns Section */}
-              {aiAnalysis.concerns && aiAnalysis.concerns.length > 0 ? (
-                <div className="mb-4">
+                {aiAnalysis.concerns && aiAnalysis.concerns.length > 0 ? (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                      Key Concerns:
+                    </h4>
+                    <div className="bg-white bg-opacity-60 rounded-lg p-3 space-y-1">
+                      {aiAnalysis.concerns.map((concern, idx) => (
+                        <div key={idx} className="flex items-start">
+                          <span className="text-red-600 mr-2">•</span>
+                          <span className="text-gray-700">{concern}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <div className="bg-white bg-opacity-60 rounded-lg p-3">
+                      <p className="text-green-800 font-medium flex items-center">
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        All monitored vital signs within normal ranges
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div>
                   <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
-                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                    Key Concerns:
+                    <span className={`w-2 h-2 rounded-full mr-2 ${
+                      aiAnalysis.status === 'Critical' ? 'bg-red-500' :
+                      aiAnalysis.status === 'Caution' ? 'bg-yellow-500' :
+                      'bg-blue-500'
+                    }`}></span>
+                    Recommendations:
                   </h4>
                   <div className="bg-white bg-opacity-60 rounded-lg p-3 space-y-1">
-                    {aiAnalysis.concerns.map((concern, idx) => (
-                      <div key={idx} className="flex items-start">
-                        <span className="text-red-600 mr-2">•</span>
-                        <span className="text-gray-700">{concern}</span>
-                      </div>
-                    ))}
+                    {aiAnalysis.status === 'Critical' ? (
+                      <>
+                        <div className="flex items-start">
+                          <span className="text-red-600 mr-2">•</span>
+                          <span className="text-gray-700 font-medium">Immediate medical intervention required</span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="text-red-600 mr-2">•</span>
+                          <span className="text-gray-700">Notify attending physician immediately</span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="text-red-600 mr-2">•</span>
+                          <span className="text-gray-700">Prepare emergency equipment</span>
+                        </div>
+                      </>
+                    ) : aiAnalysis.status === 'Caution' ? (
+                      <>
+                        <div className="flex items-start">
+                          <span className="text-yellow-600 mr-2">•</span>
+                          <span className="text-gray-700">Continue close monitoring</span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="text-yellow-600 mr-2">•</span>
+                          <span className="text-gray-700">Document all readings</span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="text-yellow-600 mr-2">•</span>
+                          <span className="text-gray-700">Alert medical staff if condition worsens</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start">
+                          <span className="text-green-600 mr-2">•</span>
+                          <span className="text-gray-700">Continue routine monitoring</span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="text-green-600 mr-2">•</span>
+                          <span className="text-gray-700">Maintain current treatment plan</span>
+                        </div>
+                        <div className="flex items-start">
+                          <span className="text-green-600 mr-2">•</span>
+                          <span className="text-gray-700">All systems functioning optimally</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-              ) : (
-                <div className="mb-4">
-                  <div className="bg-white bg-opacity-60 rounded-lg p-3">
-                    <p className="text-green-800 font-medium flex items-center">
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      All monitored vital signs within normal ranges
-                    </p>
-                  </div>
-                </div>
-              )}
 
-              {/* Recommendations Section */}
-              <div>
-                <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
-                  <span className={`w-2 h-2 rounded-full mr-2 ${
-                    aiAnalysis.status === 'Critical' ? 'bg-red-500' :
-                    aiAnalysis.status === 'Caution' ? 'bg-yellow-500' :
-                    'bg-blue-500'
-                  }`}></span>
-                  Recommendations:
-                </h4>
-                <div className="bg-white bg-opacity-60 rounded-lg p-3 space-y-1">
-                  {aiAnalysis.status === 'Critical' ? (
-                    <>
-                      <div className="flex items-start">
-                        <span className="text-red-600 mr-2">•</span>
-                        <span className="text-gray-700 font-medium">Immediate medical intervention required</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="text-red-600 mr-2">•</span>
-                        <span className="text-gray-700">Notify attending physician immediately</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="text-red-600 mr-2">•</span>
-                        <span className="text-gray-700">Prepare emergency equipment</span>
-                      </div>
-                    </>
-                  ) : aiAnalysis.status === 'Caution' ? (
-                    <>
-                      <div className="flex items-start">
-                        <span className="text-yellow-600 mr-2">•</span>
-                        <span className="text-gray-700">Continue close monitoring</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="text-yellow-600 mr-2">•</span>
-                        <span className="text-gray-700">Document all readings</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="text-yellow-600 mr-2">•</span>
-                        <span className="text-gray-700">Alert medical staff if condition worsens</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-start">
-                        <span className="text-green-600 mr-2">•</span>
-                        <span className="text-gray-700">Continue routine monitoring</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="text-green-600 mr-2">•</span>
-                        <span className="text-gray-700">Maintain current treatment plan</span>
-                      </div>
-                      <div className="flex items-start">
-                        <span className="text-green-600 mr-2">•</span>
-                        <span className="text-gray-700">All systems functioning optimally</span>
-                      </div>
-                    </>
-                  )}
+                <div className="mt-4 pt-3 border-t border-gray-300">
+                  <p className="text-xs text-gray-600 flex items-center">
+                    <Brain className="w-3 h-3 mr-1" />
+                    <span className="font-medium">Risk Assessment:</span>
+                    <span className="ml-1">Patient with {patientData.disease} requires continuous monitoring. {aiAnalysis.concerns && aiAnalysis.concerns.length > 0 ? 'Current abnormalities should be addressed promptly.' : 'Condition currently stable.'}</span>
+                  </p>
                 </div>
-              </div>
-
-              {/* Risk Assessment Footer */}
-              <div className="mt-4 pt-3 border-t border-gray-300">
-                <p className="text-xs text-gray-600 flex items-center">
-                  <Brain className="w-3 h-3 mr-1" />
-                  <span className="font-medium">Risk Assessment:</span>
-                  <span className="ml-1">Patient with {patientData.disease} requires continuous monitoring. {aiAnalysis.concerns && aiAnalysis.concerns.length > 0 ? 'Current abnormalities should be addressed promptly.' : 'Condition currently stable.'}</span>
-                </p>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Readings</h3>
@@ -602,6 +570,7 @@ const HealthMonitor = () => {
                 <tr className="border-b">
                   <th className="text-left py-2 px-2">Time</th>
                   <th className="text-left py-2 px-2">HR</th>
+                  <th className="text-left py-2 px-2">BPM</th>
                   <th className="text-left py-2 px-2">SpO2</th>
                   <th className="text-left py-2 px-2">BP</th>
                   <th className="text-left py-2 px-2">Temp</th>
@@ -614,6 +583,7 @@ const HealthMonitor = () => {
                   <tr key={idx} className="border-b hover:bg-gray-50">
                     <td className="py-2 px-2">{record.time}</td>
                     <td className="py-2 px-2">{record.heartRate}</td>
+                    <td className="py-2 px-2">{record.bpm}</td>
                     <td className="py-2 px-2">{record.oxygenLevel}%</td>
                     <td className="py-2 px-2">{record.bloodPressureSys ? `${record.bloodPressureSys}/${record.bloodPressureDia}` : '--'}</td>
                     <td className="py-2 px-2">{record.temperature ? `${record.temperature}°C` : '--'}</td>
@@ -633,6 +603,7 @@ const HealthMonitor = () => {
 const VitalCard = ({ icon, title, value, unit, normal, color, active }) => {
   const colorClasses = {
     red: 'bg-red-100 text-red-600',
+    pink: 'bg-pink-100 text-pink-600',
     purple: 'bg-purple-100 text-purple-600',
     blue: 'bg-blue-100 text-blue-600',
     orange: 'bg-orange-100 text-orange-600',
